@@ -1,0 +1,130 @@
+import numpy as np
+import pandas as pd
+import ast
+import sklearn
+import nltk
+
+
+#Storing 5000 TMDB dataset in the following variables
+movies = pd.read_csv('tmdb_5000_movies.csv')
+credits = pd.read_csv('tmdb_5000_credits.csv')
+movies.head()
+movies.head(1)
+credits.head(1)
+movies.merge(credits,on='title')
+movies = movies.merge(credits,on='title')
+credits.shape
+movies.shape
+movies.head(1)
+# genres
+# id
+# keywords
+# title
+# overview
+# cast
+# crew
+
+movies = movies[['movie_id','title','overview','genres','keywords','cast','crew']]
+movies.head()
+# Removing movies which have null entries
+movies.isnull().sum()
+movies.dropna(inplace=True)
+movies.duplicated().sum()
+movies.iloc[0].genres
+def convert(obj):
+    L = []
+    for i in ast.literal_eval(obj):
+        L.append(i['name'])
+    return L
+
+ast.literal_eval('[{"id": 28, "name": "Action"}, {"id": 12, "name": "Adventure"}, {"id": 14, "name": "Fantasy"}, {"id": 878, "name": "Science Fiction"}]')
+movies.head()
+movies['genres'].apply(convert)
+movies['genres'] = movies['genres'].apply(convert)
+movies.head()
+movies['keywords'] = movies['keywords'].apply(convert)
+movies.head()
+def convert3(obj):
+    L = []
+    counter = 0
+    for i in ast.literal_eval(obj):
+        if counter != 3:
+            L.append(i['name'])
+            counter+=1
+        else:
+            break
+    return L
+movies['cast'] = movies['cast'].apply(convert3)
+movies.head()
+movies['crew'][0]
+def fetch_director(obj):
+    L = []
+    for i in ast.literal_eval(obj):
+        if i['job'] == 'Director':
+            L.append(i['name'])
+            break
+    return L
+movies['crew'] = movies['crew'].apply(fetch_director)
+movies.head()
+movies['overview'] = movies['overview'].apply(lambda x:x.split())
+movies.head()
+#Removing space between words to create them as a single entitie.
+movies['genres'] = movies['genres'].apply(lambda x:[i.replace(" ","") for i in x])
+movies['keywords'] = movies['keywords'].apply(lambda x:[i.replace(" ","") for i in x])
+movies['cast'] = movies['cast'].apply(lambda x:[i.replace(" ","") for i in x])
+movies['crew'] = movies['crew'].apply(lambda x:[i.replace(" ","") for i in x])
+movies.head()
+#storing entries of overview,genres,keywords,cast,crew in a single column name tag .
+movies['tags'] = movies['overview'] + movies['genres'] + movies['keywords'] + movies['cast'] + movies['crew']
+movies.head()
+new_df = movies[['movie_id','title','tags']]
+#converting list in tags into a string 
+new_df['tags'] = new_df['tags'].apply(lambda x:" ".join(x))
+new_df.head()
+#using steming technique to convert all 5000 similar words in there main form
+#convert['loving','loved','love'] to ['love','love','love'] using library nltk
+from nltk.stem.porter import PorterStemmer
+ps = PorterStemmer()
+def stem(text):
+    y = []
+    
+    for i in text.split():
+        y.append(ps.stem(i))
+    return " ".join(y)
+new_df['tags'] = new_df['tags'].apply(stem)
+new_df['tags'][0]
+new_df['tags'] = new_df['tags'].apply(lambda x:x.lower())
+new_df.head()
+#making vector of tag coluumn using scikit learn library.
+#and removing stop words eg. are,of,to,from,and etc.
+from sklearn.feature_extraction.text import CountVectorizer
+cv = CountVectorizer(max_features=5000,stop_words='english')
+#convert cv in numpy array and store as vectors
+vectors = cv.fit_transform(new_df['tags']).toarray()
+vectors[0]
+#getting a list 5000 most common words 
+cv.get_feature_names()
+ps.stem('dancing')
+stem('In the 22nd century, a paraplegic Marine is dispatched to the moon Pandora on a unique mission, but becomes torn between following orders and protecting an alien civilization. Action Adventure Fantasy ScienceFiction cultureclash future spacewar spacecolony society spacetravel futuristic romance space alien tribe alienplanet cgi marine soldier battle loveaffair antiwar powerrelations mindandsoul 3d SamWorthington ZoeSaldana SigourneyWeaver JamesCameron')
+#calculating cosine distance to measure similarity between movies
+from sklearn.metrics.pairwise import cosine_similarity
+similarity = cosine_similarity(vectors)
+similarity[1]
+# apply sorted function to give similarity in descending order for top 10 movies
+sorted(list(enumerate(similarity[0])),reverse=True,key=lambda x:x[1])[1:10]
+#function that gives top 10 similar movies for a given movie
+def recommend(movie):
+    movie_index = new_df[new_df['title'] == movie ].index[0]
+    distances = similarity[movie_index]
+    movies_list = sorted(list(enumerate(distances)),reverse=True,key=lambda x:x[1])[1:11]
+    
+    for i in movies_list:
+        print(new_df.iloc[i[0]].title)
+
+recommend('Batman Begins')
+new_df.iloc[539].title
+#further libraries are used for web application
+import pickle
+pickle.dump(new_df,open('movies.pkl','wb'))
+pickle.dump(new_df.to_dict(),open('movie_dict.pkl','wb'))
+pickle.dump(similarity,open('similarity.pkl','wb'))
